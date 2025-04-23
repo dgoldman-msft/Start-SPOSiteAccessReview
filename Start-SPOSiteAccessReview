@@ -1,0 +1,284 @@
+﻿function Write-ToLog {
+    <#
+        .SYNOPSIS
+            Save output
+
+        .DESCRIPTION
+            Overload function for Write-Output
+
+        .PARAMETER LoggingDirectory
+            Directory to save the log file to. Default is "$env:MyDocuments".
+
+        .PARAMETER LoggingFilename
+            Filename to save the log file to. Default is "SamReportingLogs.txt".
+
+        .EXAMPLE
+            None
+
+        .NOTES
+            None
+    #>
+
+    [OutputType('System.String')]
+    [CmdletBinding(DefaultParameterSetName = 'Default')]
+    param
+    (
+        [Parameter(ParameterSetName = 'Default')]
+        [string]
+        $LoggingDirectory,
+
+        [string]
+        $LoggingFilename,
+
+        [Parameter(Mandatory = $True, Position = 0)]
+        [string]
+        $InputString
+    )
+
+    try {
+        if (-NOT(Test-Path -Path $LoggingDirectory)) {
+            Write-Verbose "Creating New Logging Directory"
+            New-Item -Path $LoggingDirectory -ItemType Directory -ErrorAction Stop | Out-Null
+        }
+    }
+    catch {
+        Write-Output "$_"
+        return
+    }
+
+    try {
+        # Console and log file output
+        Write-Output "$($InputString)"
+        $stringObject = "[{0:MM/dd/yy} {0:HH:mm:ss}] - {1}" -f (Get-Date), $InputString
+        Add-Content -Path (Join-Path $LoggingDirectory -ChildPath $LoggingFilename) -Value $stringObject -Encoding utf8 -ErrorAction Stop
+        Write-Verbose "Logging to $($LoggingDirectory)\$($LoggingFilename)"
+    }
+    catch {
+        Write-Output "$_"
+        return
+    }
+}
+
+function Start-SPOSiteAccessReview {
+    <#
+        .SYNOPSIS
+            Starts a SharePoint site access review.
+
+        .DESCRIPTION
+            This cmdlet is used to generate site access reviews for SharePoint Online. It reads report ID's from a text file and generates site access reviews for each report id found.
+            The script also checks if the required modules are installed and imports them if necessary. It handles errors and logs the output to a specified directory.
+
+        .PARAMETER DisconnectFromSPO
+            A switch parameter that, if specified, will disconnect from SharePoint Online after the report collection is completed.
+
+        .PARAMETER InputFilePath
+            Input file to use with site ids. This can be a .txt or .csv file. This parameter is mandatory.
+            The file should contain a list of site IDs, one per line. If using a .csv file, it should contain a column named "SiteID".
+
+        .PARAMETER LoggingDirectory
+            Directory to save the log file to. Default is "$env:MyDocuments\SPOSiteAccessReviewLogs".
+
+        .PARAMETER LoggingFilename
+            Filename to save the log file to. Default is "SPOSiteAccessReviewLogs.txt".
+
+        .PARAMETER ReportID
+            Specifies the report ID to use for the site access review. This parameter is mandatory.
+
+        .PARAMETER TenantDomain
+            Specifies the domain of the tenant. This parameter is mandatory.
+
+        .PARAMETER TenantAdminUrl
+            Specifies the URL of the tenant admin site. Default is "https://$TenantDomain-admin.sharepoint.com".
+
+        .EXAMPLE
+            C:\PS> Start-SPOSiteAccessReview -TenantDomain contoso -ReportID e4525a99-781c-437c-b4fa-2335cf9142a9 -InputFilePath C:\temp\siteids.txt
+
+            This will read in all of the report IDs from the file c:\temp\reports.txt and generate a site access review for each of them.
+
+        .EXAMPLE
+            C:\PS> start-SPOSiteAccessReview -TenantDomain contoso -ReportID e4525a99-781c-437c-b4fa-2335cf9142a9 -InputFilePath C:\temp\siteids.txt -DisconnectFromSPO
+
+            This will read in all of the report IDs from the file c:\temp\reports.txt and generate a site access review for each of them and disconnect from SharePoint Online.
+
+        .NOTES
+            For more information please see: https://learn.microsoft.com/en-us/powershell/module/sharepoint-online/start-spositereview?view=sharepoint-ps
+    #>
+
+    [OutputType('System.String')]
+    [CmdletBinding(DefaultParameterSetName = 'Default')]
+    param
+    (
+        [Parameter(ParameterSetName = 'Default', HelpMessage = 'Disconnect from SharePoint Online after the report collection is completed. Default is $false.')]
+        [switch]
+        $DisconnectFromSPO,
+
+        [Parameter(Mandatory = $true, ParameterSetName = 'Default', HelpMessage = 'Input file to use with site ids. This can be a .txt or  .csv file. This parameter is mandatory.')]
+        [string]
+        $InputFilePath,
+
+        [Parameter(ParameterSetName = 'Default', HelpMessage = 'Specifies the directory to save the log file to. Default is $env:MyDocuments\SPOSiteAccessReviewLogs')]
+        [string]
+        $LoggingDirectory = (Join-Path -Path ([Environment]::GetFolderPath("MyDocuments")) -ChildPath "SPOSiteAccessReviewLogs"),
+
+        [Parameter(ParameterSetName = 'Default', HelpMessage = 'Specifies the filename to save the log file to. Default is SPOSiteAccessReviewLogs.txt')]
+        [string]
+        $LoggingFilename = "SPOSiteAccessReviewLogs.txt",
+
+        [Parameter(Mandatory = $true, ParameterSetName = 'Default', HelpMessage = 'Baseline ReportID. Default is SPOSiteAccessReviewLogs.txt')]
+        [string]
+        $ReportID,
+
+        [Parameter(Mandatory = $true, ParameterSetName = 'Default', HelpMessage = 'Specifies the domain of the tenant. This parameter is mandatory.')]
+        [string]
+        $TenantDomain
+    )
+
+    $disconnectFromSPO = $false
+    $numOfSiteAccessReviewsStarted = 0
+    $numOfSiteAccessReviewsSkipped = 0
+    $modules = @('Microsoft.Online.SharePoint.PowerShell')
+
+    # Check if running as administrator
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $currentPrincipal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+    if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "This script must be run as an administrator."
+        return
+    }
+    else {
+        Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Starting script execution as administrator."
+    }
+
+    foreach ($module in $modules) {
+        try {
+            # Check if the module is installed
+            if (-not (Get-Module -ListAvailable -Name $module)) {
+                # Install the module
+                Install-Module -Name $module -Force -AllowClobber -ErrorAction SilentlyContinue
+                Write-Verbose "Installed $($module) module."
+                Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Installed $($module) module."
+            }
+            else {
+                Write-Verbose "$($module) already installed."
+                Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "$($module) already installed."
+            }
+
+            # Import the module
+            if (-not (Get-Module -Name $module)) {
+                if ($PSVersionTable.PSEdition -eq "Core" -and $module -eq "Microsoft.Online.SharePoint.PowerShell") {
+                    Import-Module -Name $module -UseWindowsPowerShell -ErrorAction SilentlyContinue
+                    Write-Verbose "Connecting with Windows PowerShell Core Version for $($module)."
+                    Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Connecting with Windows PowerShell Core Version for $($module)."
+                }
+                else {
+                    Import-Module -Name $module -ErrorAction SilentlyContinue
+                    Write-Verbose "Connecting with Windows PowerShell Desktop Version for $($module)."
+                    Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Connecting with Windows PowerShell Desktop Version for $($module)."
+                }
+            }
+            else {
+                Write-Verbose "$($module) module already imported."
+                Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "$($module) module already imported."
+            }
+        }
+        catch {
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Error: $_"
+            return
+        }
+    }
+
+    # Check connection to SharePoint Online
+    try {
+        Write-Verbose "Checking for prior connection to SharePoint Online."
+        Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Checking for prior connection to SharePoint Online."
+        $connection = Get-SPOTenant -ErrorAction SilentlyContinue
+        if (-not $connection) {
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Not connected to SharePoint Online. Attempting to connect to SharePoint Online"
+            Connect-SPOService -Url "https://$TenantDomain-admin.sharepoint.com" -ErrorAction SilentlyContinue
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Connected to SharePoint Online."
+        }
+        else {
+            Write-Verbose "Already Connected to SharePoint Online."
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Already Connected to SharePoint Online."
+        }
+    }
+    catch {
+        Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Error: $_"
+        return
+    }
+
+    try {
+        # Read report IDs from a text file
+        if (-not (Test-Path -Path $InputFilePath)) {
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Error: Report IDs file not found at $($InputFilePath)."
+            return
+        }
+
+        if ($InputFilePath -like "*.txt") {
+            $siteIds = Get-Content -Path $InputFilePath -ErrorAction Stop
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Site IDs read from text file. Found $($siteIds.Count) report IDs."
+        }
+        elseif ($InputFilePath -like "*.csv") {
+            $csvContent = Import-Csv -Path $InputFilePath -ErrorAction Stop
+            if ($csvContent -and $csvContent.PSObject.Properties.Name -contains "SiteID") {
+                $siteIds = $csvContent.SiteID
+                Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Site IDs read from CSV file. Found $($siteIds.Count) report IDs."
+            }
+            else {
+                Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Error: CSV file does not contain a 'Site' column."
+                return
+            }
+        }
+        else {
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Error: Unsupported file format. Please provide a .csv or .txt file."
+            return
+        }
+        foreach ($siteId in $siteIds) {
+            if (-not [string]::IsNullOrWhiteSpace($siteId)) {
+                Start-SPOSiteReview -ReportID $ReportID -SiteID $siteId -Comment "Please check this site access review for oversharing." -ErrorAction SilentlyContinue
+                $numOfSiteAccessReviewsStarted++
+            }
+            else {
+                Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Skipping empty Site: $($siteId)."
+                $numOfSiteAccessReviewsSkipped++
+            }
+        }
+
+        # Check if the site access review was started successfully
+        $reports = Get-SPOSiteReview -SiteReviewID $siteId | ForEach-Object {
+            [PSCustomObject]@{
+                RunspaceId              = $_.RunspaceId
+                ReviewId                = $_.ReviewId
+                SiteId                  = $_.SiteId
+                ReviewInitiatedDateTime = $_.ReviewInitiatedDateTime
+                ReportEntity            = $_.ReportEntity
+                Status                  = $_.Status
+                AdminComment            = $_.AdminComment
+                SiteName                = $_.SiteName
+            }
+        }
+
+        foreach ($report in $reports) {
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Process site access review for: SiteName: $($report.SiteName) - Site ID: $($report.SiteId) - Review ID: $($report.ReviewId) - Status: $($report.Status) Report Entity: $($report.ReportEntity)"
+        }
+    }
+    catch {
+        Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Error: $_"
+    }
+    finally {
+        # Disconnect from SharePoint Online if connected
+        Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "`r`n-----------------------------------------"
+        if ($DisconnectFromSPO -eq $True) {
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Disconnecting from the SPOService."
+            Disconnect-SPOService
+        }
+        else {
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Not disconnecting from the SPOService."
+        }
+
+        Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "`r`nTotal site access reviews generated: $($numOfSiteAccessReviewsStarted)"
+        Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Total site access reviews skipped: $($numOfSiteAccessReviewsSkipped)"
+        Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "`r`nFor more information please see the logging file: $($LoggingDirectory)\$($LoggingFilename)"
+        Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Script completed."
+    }
+}
