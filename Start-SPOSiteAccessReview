@@ -245,7 +245,7 @@ function Start-SPOSiteAccessReview {
         }
 
         # Check if the site access review was started successfully
-        $reports = Get-SPOSiteReview -SiteReviewID $siteId | ForEach-Object {
+        $reports = Get-SPOSiteReview | ForEach-Object {
             [PSCustomObject]@{
                 RunspaceId              = $_.RunspaceId
                 ReviewId                = $_.ReviewId
