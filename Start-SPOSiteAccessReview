@@ -259,7 +259,7 @@ function Start-SPOSiteAccessReview {
         }
 
         foreach ($report in $reports) {
-            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Process site access review for: SiteName: $($report.SiteName) - Site ID: $($report.SiteId) - Review ID: $($report.ReviewId) - Status: $($report.Status) Report Entity: $($report.ReportEntity)"
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Process site access review for SiteName: $($report.SiteName) - Site ID: $($report.SiteId) - Review ID: $($report.ReviewId) - Status: $($report.Status) - Report Entity: $($report.ReportEntity)"
         }
     }
     catch {
