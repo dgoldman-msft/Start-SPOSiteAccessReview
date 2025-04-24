@@ -10,7 +10,7 @@
             Directory to save the log file to. Default is "$env:MyDocuments".
 
         .PARAMETER LoggingFilename
-            Filename to save the log file to. Default is "SamReportingLogs.txt".
+            Filename to save the log file to. Default is "SPOSiteAccessReviewLogs.txt".
 
         .EXAMPLE
             None
@@ -93,12 +93,12 @@ function Start-SPOSiteAccessReview {
         .EXAMPLE
             C:\PS> Start-SPOSiteAccessReview -TenantDomain contoso -ReportID e4525a99-781c-437c-b4fa-2335cf9142a9 -InputFilePath C:\temp\siteids.txt
 
-            This will read in all of the report IDs from the file c:\temp\reports.txt and generate a site access review for each of them.
+            This will read in all of the site IDs from the file c:\temp\reports.txt and generate a site access review for each of them.
 
         .EXAMPLE
             C:\PS> start-SPOSiteAccessReview -TenantDomain contoso -ReportID e4525a99-781c-437c-b4fa-2335cf9142a9 -InputFilePath C:\temp\siteids.txt -DisconnectFromSPO
 
-            This will read in all of the report IDs from the file c:\temp\reports.txt and generate a site access review for each of them and disconnect from SharePoint Online.
+            This will read in all of the site IDs from the file c:\temp\reports.txt and generate a site access review for each of them and disconnect from SharePoint Online.
 
         .NOTES
             For more information please see: https://learn.microsoft.com/en-us/powershell/module/sharepoint-online/start-spositereview?view=sharepoint-ps
@@ -112,7 +112,7 @@ function Start-SPOSiteAccessReview {
         [switch]
         $DisconnectFromSPO,
 
-        [Parameter(Mandatory = $true, ParameterSetName = 'Default', HelpMessage = 'Input file to use with site ids. This can be a .txt or  .csv file. This parameter is mandatory.')]
+        [Parameter(Mandatory = $true, ParameterSetName = 'Default', HelpMessage = 'Input file to use with site ids. This can be a .txt or .csv file. This parameter is mandatory.')]
         [string]
         $InputFilePath,
 
@@ -208,21 +208,21 @@ function Start-SPOSiteAccessReview {
     }
 
     try {
-        # Read report IDs from a text file
+        # Read site IDs from a text file
         if (-not (Test-Path -Path $InputFilePath)) {
-            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Error: Report IDs file not found at $($InputFilePath)."
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Error: Site IDs file not found at $($InputFilePath)."
             return
         }
 
         if ($InputFilePath -like "*.txt") {
             $siteIds = Get-Content -Path $InputFilePath -ErrorAction Stop
-            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Site IDs read from text file. Found $($siteIds.Count) report IDs."
+            Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Site IDs read from text file. Found $($siteIds.Count) site IDs."
         }
         elseif ($InputFilePath -like "*.csv") {
             $csvContent = Import-Csv -Path $InputFilePath -ErrorAction Stop
             if ($csvContent -and $csvContent.PSObject.Properties.Name -contains "SiteID") {
                 $siteIds = $csvContent.SiteID
-                Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Site IDs read from CSV file. Found $($siteIds.Count) report IDs."
+                Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Site IDs read from CSV file. Found $($siteIds.Count) site IDs."
             }
             else {
                 Write-ToLog -LoggingDirectory $LoggingDirectory -LoggingFilename $LoggingFilename -InputString "Error: CSV file does not contain a 'Site' column."
