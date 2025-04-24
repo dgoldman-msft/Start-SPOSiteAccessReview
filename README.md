@@ -3,7 +3,7 @@ Kick off SharePoint Site Access Review
 
 ## DESCRIPTION
 
-This cmdlet is used to generate site access reviews for SharePoint Online. It reads siteId ID's from a text file and generates site access reviews for each siteId id found. The script also checks if the required modules are installed and imports them if necessary. It handles errors and logs the output to a specified directory.
+This cmdlet is used to generate site access reviews for SharePoint Online. It reads site ID's from a text file and generates site access reviews for each siteId id found. The script also checks if the required modules are installed and imports them if necessary. It handles errors and logs the output to a specified directory.
 
 ## How to get started with Start-SPOSiteAccessReview
 
