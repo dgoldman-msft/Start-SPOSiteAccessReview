@@ -12,12 +12,12 @@ This cmdlet is used to generate site access reviews for SharePoint Online. It re
 3. Run one of the examples below and allow for tab completion to see all of the available options
 
 ## EXAMPLE 1
-    C:\PS> Start-SPOSiteAccessReview -TenantDomain contoso -siteIdID e4525a99-781c-437c-b4fa-2335cf9142a9 -InputFilePath C:\temp\siteids.txt
+    C:\PS> Start-SPOSiteAccessReview -TenantDomain contoso -ReportID "ReportIDFromBaselineReport" -InputFilePath C:\temp\siteids.txt
 
     This will read in all of the siteId IDs from the file c:\temp\siteIds.txt and generate a site access review for each of them.
 
 ## EXAMPLE 2
-    C:\PS> start-SPOSiteAccessReview -TenantDomain contoso -siteIdID e4525a99-781c-437c-b4fa-2335cf9142a9 -InputFilePath C:\temp\siteids.txt -DisconnectFromSPO
+    C:\PS> start-SPOSiteAccessReview -TenantDomain contoso -ReportID "ReportIDFromBaselineReport" -InputFilePath C:\temp\siteids.txt -DisconnectFromSPO
 
     This will read in all of the siteId IDs from the file c:\temp\siteIds.txt and generate a site access review for each of them and disconnect from SharePoint Online.
 
